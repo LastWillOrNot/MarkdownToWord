@@ -1,0 +1,6 @@
+{
+  "name": "Convertisseur Markdown vers Word",
+  "description": "Convertisseur bidirectionnel Markdown et Microsoft Word (.docx) : importez et modifiez des documents Word ou Markdown, avec prévisualisation fidèle et téléchargement dans les deux formats.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
