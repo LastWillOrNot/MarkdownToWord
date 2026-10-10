@@ -14,12 +14,14 @@ import {
   Footer,
   PageNumber,
   PageBreak,
+  ImageRun,
   ShadingType,
   convertInchesToTwip,
   ExternalHyperlink,
 } from 'docx';
 import { marked } from 'marked';
 import { DocumentOptions, DocumentTheme } from '../types';
+import { isMermaidCode, renderMermaidToPng } from './mermaidRenderer';
 
 /**
  * Palette de couleurs et configuration typographique par thème
@@ -340,7 +342,49 @@ export async function generateWordDocument(
       }
 
       case 'code': {
-        // Bloc de code avec cadre et police mono
+        // Détection et conversion automatique des diagrammes Mermaid en image haute fidélité
+        if (isMermaidCode(token.text, token.lang)) {
+          const pngResult = await renderMermaidToPng(token.text);
+          if (pngResult) {
+            // Insérer l'image du diagramme Mermaid dans le document Word
+            docElements.push(
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 180, after: 80 },
+                children: [
+                  new ImageRun({
+                    data: pngResult.data,
+                    type: 'png',
+                    transformation: {
+                      width: pngResult.width,
+                      height: pngResult.height,
+                    },
+                  }),
+                ],
+              })
+            );
+
+            // Légende sous la figure du diagramme
+            docElements.push(
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 40, after: 160 },
+                children: [
+                  new TextRun({
+                    text: 'Figure : Diagramme Mermaid',
+                    italics: true,
+                    size: 18, // 9pt
+                    color: '64748B',
+                    font: theme.font,
+                  }),
+                ],
+              })
+            );
+            break;
+          }
+        }
+
+        // Bloc de code avec cadre et police mono (fallback ou code standard)
         const codeLines = token.text.split('\n');
         for (const line of codeLines) {
           docElements.push(

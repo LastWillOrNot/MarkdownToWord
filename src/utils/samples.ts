@@ -185,5 +185,63 @@ npm run build
 > **Principe de protection des données :**  
 > Toutes les chaînes de caractères externes subissent une encapsulation stricte et un nettoyage anti-injection (XSS) avant tout affichage visuel.
 `
+  },
+  {
+    id: 'cycle-de-vie-mermaid',
+    name: 'Cycle de vie & Diagrammes (Mermaid)',
+    description: 'Diagramme d’états Mermaid, graphe de composants et règles de gestion',
+    filename: 'Cycle_de_Vie_Diagrammes_Mermaid.docx',
+    content: `# 7. Spécification Fonctionnelle & Cycle de Vie
+
+**Module :** Gestion du Référentiel  
+**Version :** 3.1.0  
+**Auteur :** Architecte Solution  
+
+---
+
+## 7.7 Cycle de vie
+
+Le diagramme d'états ci-dessous formalise les différentes transitions applicatives prises en charge :
+
+\`\`\`mermaid
+stateDiagram-v2
+    [*] --> draft: création
+    draft --> published: Publier (commit Git bloquant)
+    published --> draft: changement de statut
+    draft --> archived
+    published --> archived
+    draft --> supprimée: Supprimer (logique)
+    published --> supprimée
+\`\`\`
+
+- **RG-RUL-13** — **Publier** crée un commit Git bloquant
+- **RG-RUL-14** — L'archivage est réversible vers le statut brouillon
+- **RG-RUL-15** — La suppression logique conserve l'historique complet
+
+---
+
+## 7.8 Architecture des Flux
+
+\`\`\`mermaid
+flowchart LR
+    MD[Éditeur Markdown] --> PARSER[Parseur Sécurisé]
+    PARSER --> MMD[Convertisseur Mermaid]
+    PARSER --> TBL[Tableaux avec bordures]
+    MMD --> PREVIEW[Aperçu A4 Word]
+    TBL --> PREVIEW
+    PREVIEW --> DOCX[Téléchargement .docx]
+\`\`\`
+
+---
+
+## 7.9 Synthèse des États
+
+| Statut | Description | Action Possible | Règle Associée |
+| :--- | :--- | :--- | :--- |
+| **Brouillon (draft)** | En cours de rédaction | Publier ou Supprimer | RG-RUL-13 |
+| **Publié (published)** | Validé et disponible | Archiver ou Modifier | RG-RUL-14 |
+| **Archivé (archived)** | Lecture seule historique | Réactiver en brouillon | RG-RUL-14 |
+| **Supprimé** | Masqué sans suppression physique | Consultation audit | RG-RUL-15 |
+`
   }
 ];

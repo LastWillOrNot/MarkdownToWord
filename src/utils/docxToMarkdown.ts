@@ -18,6 +18,32 @@ function createTurndownService(): TurndownService {
   // Activer les tables et les listes de tâches GFM
   turndownService.use(gfm);
 
+  // Règle de préservation pour les diagrammes Mermaid lors de l'édition directe
+  turndownService.addRule('mermaidDiagram', {
+    filter: (node) => {
+      if (node.nodeName === 'DIV') {
+        const el = node as HTMLElement;
+        return (
+          el.hasAttribute('data-mermaid-code') ||
+          (el.className && el.className.includes('mermaid-diagram-card')) ||
+          (el.className && el.className.includes('mermaid-diagram-error'))
+        );
+      }
+      return false;
+    },
+    replacement: (_content: string, node: Node) => {
+      const el = node as HTMLElement;
+      const rawCode = el.getAttribute('data-mermaid-code') || '';
+      if (!rawCode) return '';
+      try {
+        const decoded = decodeURIComponent(rawCode);
+        return `\n\n\`\`\`mermaid\n${decoded.trim()}\n\`\`\`\n\n`;
+      } catch {
+        return `\n\n\`\`\`mermaid\n${rawCode.trim()}\n\`\`\`\n\n`;
+      }
+    },
+  });
+
   // Règles personnalisées pour un Markdown soigné
   turndownService.addRule('cleanParagraphs', {
     filter: 'p',

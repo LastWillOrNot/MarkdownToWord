@@ -1,9 +1,10 @@
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { renderSecureMarkdown } from '../utils/markdownParser';
 import { convertHtmlToMarkdown } from '../utils/docxToMarkdown';
-import { paginateMarkdown } from '../utils/pageSplitter';
+import { paginateMarkdown, DocumentPage } from '../utils/pageSplitter';
+import { extractMermaidBlocks, renderAllMermaidBlocks } from '../utils/mermaidRenderer';
 import { DocumentOptions, DocumentTheme } from '../types';
-import { FileText, Eye, Printer, Edit3, Check, Upload, BookOpen } from 'lucide-react';
+import { FileText, Eye, Printer, Edit3, Check, Upload, BookOpen, Workflow } from 'lucide-react';
 
 interface DocumentPreviewProps {
   markdown: string;
@@ -39,14 +40,34 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const docxInputRef = useRef<HTMLInputElement>(null);
 
-  // Rendu HTML sécurisé (pour le mode édition globale)
-  const htmlContent = useMemo(() => {
-    return renderSecureMarkdown(markdown);
-  }, [markdown]);
+  // État du contenu HTML et de la pagination A4 avec support Mermaid
+  const [htmlContent, setHtmlContent] = useState<string>(() => renderSecureMarkdown(markdown));
+  const [pages, setPages] = useState<DocumentPage[]>(() => paginateMarkdown(markdown));
+  const [hasMermaid, setHasMermaid] = useState<boolean>(false);
 
-  // Découpage automatique en pages A4 pour la prévisualisation réaliste
-  const pages = useMemo(() => {
-    return paginateMarkdown(markdown);
+  // Synchronisation synchrone et asynchrone des diagrammes Mermaid
+  useEffect(() => {
+    let isCancelled = false;
+    const { blocks } = extractMermaidBlocks(markdown);
+    setHasMermaid(blocks.length > 0);
+
+    // 1. Rendu préliminaire immédiat (ou synchrone si déjà en cache)
+    setHtmlContent(renderSecureMarkdown(markdown));
+    setPages(paginateMarkdown(markdown));
+
+    // 2. Si des blocs Mermaid existent, résolution et injection des SVG
+    if (blocks.length > 0) {
+      renderAllMermaidBlocks(blocks).then((mermaidMap) => {
+        if (!isCancelled) {
+          setHtmlContent(renderSecureMarkdown(markdown, mermaidMap));
+          setPages(paginateMarkdown(markdown, mermaidMap));
+        }
+      });
+    }
+
+    return () => {
+      isCancelled = true;
+    };
   }, [markdown]);
 
   // Synchronisation du DOM en mode édition directe
@@ -112,6 +133,12 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                 <BookOpen className="h-3 w-3" />
                 {totalPages} {totalPages > 1 ? 'pages A4' : 'page A4'}
               </span>
+              {hasMermaid && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-md">
+                  <Workflow className="h-3 w-3" />
+                  Diagrammes Mermaid actifs
+                </span>
+              )}
             </h2>
             <p className="text-[11px] text-slate-500">
               Format A4 avec pagination continue & tableaux bordés

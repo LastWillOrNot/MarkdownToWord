@@ -82,3 +82,30 @@
   }
 }
 
+/* Styles pour les conteneurs et SVGs Mermaid */
+.mermaid-diagram-card {
+  user-select: none;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.mermaid-diagram-card svg {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+  margin: 0 auto;
+}
+
+.mermaid-diagram-error {
+  border-radius: 0.75rem;
+}
+

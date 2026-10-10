@@ -1,6 +1,11 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { DocumentStats } from '../types';
+import {
+  extractMermaidBlocks,
+  renderAllMermaidBlocks,
+  injectMermaidHtml,
+} from './mermaidRenderer';
 
 /**
  * Configure les options de parsing Markdown
@@ -12,30 +17,73 @@ marked.setOptions({
 
 /**
  * Nettoie et transforme le code Markdown en HTML sécurisé.
- * Encapsule et assainit tout contenu externe contre les injections malveillantes (XSS).
+ * Intègre le support des diagrammes Mermaid avec assainissement rigoureux anti-XSS.
  */
-export function renderSecureMarkdown(markdown: string): string {
+export function renderSecureMarkdown(
+  markdown: string,
+  mermaidMap?: Map<string, string>
+): string {
   if (!markdown || markdown.trim() === '') {
     return '<p class="text-slate-400 italic">Aucun contenu à prévisualiser.</p>';
   }
 
   try {
-    const rawHtml = marked.parse(markdown) as string;
+    const { templateMarkdown, blocks } = extractMermaidBlocks(markdown);
+    const rawHtml = marked.parse(templateMarkdown) as string;
+
     // Configuration stricte de DOMPurify pour la sécurité
     const cleanHtml = DOMPurify.sanitize(rawHtml, {
       USE_PROFILES: { html: true },
       FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'data-action'],
       ADD_TAGS: ['div', 'span', 'hr'],
-      ADD_ATTR: ['class', 'style'],
+      ADD_ATTR: ['class', 'style', 'data-mermaid-id'],
     });
 
-    return cleanHtml;
+    if (blocks.length === 0) {
+      return cleanHtml;
+    }
+
+    // Si la table de rendu Mermaid est disponible, injecter les SVGs
+    if (mermaidMap && mermaidMap.size > 0) {
+      return injectMermaidHtml(cleanHtml, mermaidMap);
+    }
+
+    // Sinon, afficher un conteneur d'attente soigné
+    return cleanHtml.replace(
+      /<div class="mermaid-block-placeholder" data-mermaid-id="([^"]+)"><\/div>/g,
+      (_match, id) => {
+        const blk = blocks.find((b) => b.id === id);
+        const code = blk ? blk.code : '';
+        const safeCode = encodeURIComponent(code);
+        return `
+          <div class="mermaid-diagram-card not-prose my-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-center select-none" data-mermaid-code="${safeCode}">
+            <div class="flex items-center justify-center gap-2 text-xs font-medium text-slate-500 py-3">
+              <span class="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+              <span>Génération du diagramme Mermaid en cours...</span>
+            </div>
+          </div>
+        `;
+      }
+    );
   } catch (error) {
     console.error('Erreur lors du rendu du Markdown :', error);
     return '<p class="text-red-500 font-medium">Erreur lors de la lecture du format Markdown.</p>';
   }
 }
+
+/**
+ * Rendu asynchrone complet avec exécution du moteur Mermaid
+ */
+export async function renderSecureMarkdownWithMermaid(markdown: string): Promise<string> {
+  const { blocks } = extractMermaidBlocks(markdown);
+  if (blocks.length === 0) {
+    return renderSecureMarkdown(markdown);
+  }
+  const mermaidMap = await renderAllMermaidBlocks(blocks);
+  return renderSecureMarkdown(markdown, mermaidMap);
+}
+
 
 /**
  * Calcule les statistiques d'un texte Markdown

@@ -1,5 +1,10 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import {
+  extractMermaidBlocks,
+  renderAllMermaidBlocks,
+  injectMermaidHtml,
+} from './mermaidRenderer';
 
 export interface DocumentPage {
   pageIndex: number;
@@ -15,8 +20,12 @@ const PAGE_TARGET_CAPACITY = 1600;
  * - Respecte d'abord les sauts de page explicites (<div class="page-break"></div> ou <!-- pagebreak -->)
  * - Découpe également les sections très longues pour éviter que le texte ne s'étire indéfiniment sur une seule page Word
  * - Purifie et sécurise chaque fragment HTML
+ * - Injecte les diagrammes Mermaid rendus
  */
-export function paginateMarkdown(markdown: string): DocumentPage[] {
+export function paginateMarkdown(
+  markdown: string,
+  mermaidMap?: Map<string, string>
+): DocumentPage[] {
   if (!markdown || markdown.trim() === '') {
     return [
       {
@@ -26,9 +35,12 @@ export function paginateMarkdown(markdown: string): DocumentPage[] {
     ];
   }
 
-  // 1. Découpage par sauts explicites
+  // 1. Extraction des blocs Mermaid sous forme d'emplacements stables
+  const { templateMarkdown, blocks } = extractMermaidBlocks(markdown);
+
+  // 2. Découpage par sauts explicites
   const explicitBreaks = /(?:<div\s+class=["'][^"']*page-break[^"']*["']\s*>\s*<\/div>|<!--\s*page-?break\s*-->)/gi;
-  const rawSections = markdown.split(explicitBreaks);
+  const rawSections = templateMarkdown.split(explicitBreaks);
 
   const rawChunks: string[] = [];
 
@@ -39,10 +51,10 @@ export function paginateMarkdown(markdown: string): DocumentPage[] {
     // Si la section contient des séparateurs '---' ou des grands titres # qui dépassent une page
     if (trimmed.length > PAGE_TARGET_CAPACITY) {
       // Découper selon les lignes de séparateurs '---' ou titres de niveau 1 ou 2
-      const blocks = trimmed.split(/(?=\n#{1,2}\s+|\n---\n)/g);
+      const blocksList = trimmed.split(/(?=\n#{1,2}\s+|\n---\n)/g);
       let currentChunk = '';
 
-      for (const block of blocks) {
+      for (const block of blocksList) {
         if (!currentChunk) {
           currentChunk = block.trim();
         } else if (currentChunk.length + block.length > PAGE_TARGET_CAPACITY) {
@@ -62,10 +74,10 @@ export function paginateMarkdown(markdown: string): DocumentPage[] {
   }
 
   if (rawChunks.length === 0) {
-    rawChunks.push(markdown);
+    rawChunks.push(templateMarkdown);
   }
 
-  // 2. Transformation en HTML assaini
+  // 3. Transformation en HTML assaini avec réinjection Mermaid
   return rawChunks.map((chunk, index) => {
     try {
       const rawHtml = marked.parse(chunk) as string;
@@ -74,12 +86,34 @@ export function paginateMarkdown(markdown: string): DocumentPage[] {
         FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
         FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'data-action'],
         ADD_TAGS: ['div', 'span', 'hr'],
-        ADD_ATTR: ['class', 'style'],
+        ADD_ATTR: ['class', 'style', 'data-mermaid-id'],
       });
+
+      let finalHtml = cleanHtml;
+      if (mermaidMap && mermaidMap.size > 0) {
+        finalHtml = injectMermaidHtml(cleanHtml, mermaidMap);
+      } else if (blocks.length > 0) {
+        finalHtml = cleanHtml.replace(
+          /<div class="mermaid-block-placeholder" data-mermaid-id="([^"]+)"><\/div>/g,
+          (_match, id) => {
+            const blk = blocks.find((b) => b.id === id);
+            const code = blk ? blk.code : '';
+            const safeCode = encodeURIComponent(code);
+            return `
+              <div class="mermaid-diagram-card not-prose my-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-center select-none" data-mermaid-code="${safeCode}">
+                <div class="flex items-center justify-center gap-2 text-xs font-medium text-slate-500 py-3">
+                  <span class="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                  <span>Génération du diagramme Mermaid en cours...</span>
+                </div>
+              </div>
+            `;
+          }
+        );
+      }
 
       return {
         pageIndex: index + 1,
-        html: cleanHtml,
+        html: finalHtml,
       };
     } catch {
       return {
@@ -89,3 +123,16 @@ export function paginateMarkdown(markdown: string): DocumentPage[] {
     }
   });
 }
+
+/**
+ * Version asynchrone qui effectue la résolution complète des diagrammes Mermaid
+ */
+export async function paginateMarkdownWithMermaid(markdown: string): Promise<DocumentPage[]> {
+  const { blocks } = extractMermaidBlocks(markdown);
+  if (blocks.length === 0) {
+    return paginateMarkdown(markdown);
+  }
+  const mermaidMap = await renderAllMermaidBlocks(blocks);
+  return paginateMarkdown(markdown, mermaidMap);
+}
+

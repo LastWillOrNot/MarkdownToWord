@@ -19,6 +19,7 @@ import {
   FileDown,
   Minus,
   SplitSquareVertical,
+  Workflow,
 } from 'lucide-react';
 import { SAMPLES, MarkdownSample } from '../utils/samples';
 
@@ -326,6 +327,22 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           aria-label="Bloc de code"
         >
           <Code className="h-3.5 w-3.5" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            insertFormatting(
+              '\n\n```mermaid\nstateDiagram-v2\n    [*] --> draft: création\n    draft --> published: Publier (commit Git bloquant)\n    published --> draft: changement de statut\n    draft --> archived\n    published --> archived\n    draft --> supprimée: Supprimer (logique)\n    published --> supprimée\n```\n\n',
+              '',
+              ''
+            )
+          }
+          className="p-1.5 hover:bg-slate-100 hover:text-indigo-700 text-indigo-600 rounded-md transition"
+          title="Insérer un diagramme / graphique Mermaid (```mermaid)"
+          aria-label="Diagramme Mermaid"
+        >
+          <Workflow className="h-3.5 w-3.5" />
         </button>
 
         <button
