@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import hljs from 'highlight.js';
 import { DocumentStats } from '../types';
 import {
   extractMermaidBlocks,
@@ -8,16 +9,61 @@ import {
 } from './mermaidRenderer';
 
 /**
- * Configure les options de parsing Markdown
+ * Configure les options de parsing Markdown avec coloration syntaxique highlight.js
  */
-marked.setOptions({
+marked.use({
   gfm: true,
   breaks: true,
+  renderer: {
+    code({ text, lang }: { text: string; lang?: string }) {
+      // Les blocs Mermaid sont préservés pour être transformés en SVG interactifs
+      if (lang === 'mermaid') {
+        return `<pre><code class="language-mermaid">${text}</code></pre>`;
+      }
+
+      const rawLang = (lang || '').trim().toLowerCase();
+      const validLanguage = rawLang && hljs.getLanguage(rawLang) ? rawLang : undefined;
+      let highlighted = '';
+
+      try {
+        if (validLanguage) {
+          highlighted = hljs.highlight(text, { language: validLanguage }).value;
+        } else {
+          highlighted = hljs.highlightAuto(text).value;
+        }
+      } catch {
+        // Fallback sécurisé en cas d'erreur de parsing
+        highlighted = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      const displayLang = (validLanguage || rawLang || 'code').toUpperCase();
+      const lines = text.split('\n');
+      const linesCount = lines.length;
+
+      return `
+        <div class="code-block-card not-prose my-4" data-code-block="true">
+          <div class="code-block-header">
+            <span class="inline-flex items-center gap-1.5 text-[11px] font-bold text-sky-400 font-mono tracking-wider">
+              <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+              ${displayLang}
+            </span>
+            <span class="text-[11px] text-slate-400 font-mono font-medium">${linesCount} ${linesCount > 1 ? 'lignes' : 'ligne'}</span>
+          </div>
+          <div class="code-block-content">
+            <pre class="hljs"><code class="hljs language-${validLanguage || 'plaintext'}">${highlighted}</code></pre>
+          </div>
+        </div>
+      `;
+    },
+  },
 });
 
 /**
  * Nettoie et transforme le code Markdown en HTML sécurisé.
- * Intègre le support des diagrammes Mermaid avec assainissement rigoureux anti-XSS.
+ * Intègre la coloration syntaxique et le support des diagrammes Mermaid avec assainissement rigoureux anti-XSS.
  */
 export function renderSecureMarkdown(
   markdown: string,
@@ -31,13 +77,19 @@ export function renderSecureMarkdown(
     const { templateMarkdown, blocks } = extractMermaidBlocks(markdown);
     const rawHtml = marked.parse(templateMarkdown) as string;
 
-    // Configuration stricte de DOMPurify pour la sécurité
+    // Configuration stricte de DOMPurify autorisant les balises de coloration syntaxique hljs
     const cleanHtml = DOMPurify.sanitize(rawHtml, {
-      USE_PROFILES: { html: true },
-      FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
-      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'data-action'],
-      ADD_TAGS: ['div', 'span', 'hr'],
-      ADD_ATTR: ['class', 'style', 'data-mermaid-id'],
+      USE_PROFILES: { html: true, svg: true },
+      FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input'],
+      FORBID_ATTR: ['onerror', 'onload', 'onmouseover'],
+      ADD_TAGS: ['div', 'span', 'hr', 'pre', 'code'],
+      ADD_ATTR: [
+        'class',
+        'style',
+        'data-mermaid-id',
+        'data-mermaid-code',
+        'data-code-block',
+      ],
     });
 
     if (blocks.length === 0) {
@@ -84,7 +136,6 @@ export async function renderSecureMarkdownWithMermaid(markdown: string): Promise
   return renderSecureMarkdown(markdown, mermaidMap);
 }
 
-
 /**
  * Calcule les statistiques d'un texte Markdown
  */
@@ -99,27 +150,33 @@ export function calculateDocumentStats(markdown: string): DocumentStats {
     };
   }
 
-  // Nettoyage sommaire des balises et caractères spéciaux Markdown pour le comptage de mots
-  const plainText = markdown
-    .replace(/```[\s\S]*?```/g, '') // retirer les blocs de code
-    .replace(/#+\s+/g, '') // retirer les #
-    .replace(/(\*\*|__|\*|_|~~)/g, '') // retirer le formattage
-    .replace(/\[(.*?)\]\(.*?\)/g, '$1') // liens
-    .replace(/[>|-]/g, ' ')
-    .trim();
+  // Nettoyage sommaire des balises Markdown pour compter les mots réels
+  const cleanText = markdown
+    .replace(/```[\s\S]*?```/g, ' ') // Blocs de code
+    .replace(/`.*?`/g, ' ') // Code inline
+    .replace(/#+\s+/g, '') // Titres
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Liens
+    .replace(/[*_~>]/g, '') // Gras, italique, citations
+    .replace(/\|/g, ' ') // Tableaux
+    .replace(/-{3,}/g, ''); // Séparateurs
 
-  const words = plainText.split(/\s+/).filter(Boolean).length;
+  const words = cleanText
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length > 0).length;
+
   const characters = markdown.length;
-  // Vitesse de lecture moyenne : 200 mots par minute
+
+  // Estimation du temps de lecture : ~200 mots par minute
   const readingTimeMinutes = Math.max(1, Math.ceil(words / 200));
 
-  // Compter les titres (#)
+  // Comptage des titres (# Titre)
   const headingsMatches = markdown.match(/^#{1,6}\s+.+$/gm);
   const headingsCount = headingsMatches ? headingsMatches.length : 0;
 
-  // Compter les tableaux (lignes contenant des barres verticales |)
-  const tableMatches = markdown.match(/^\|.+\|$/gm);
-  const tablesCount = tableMatches ? Math.max(1, Math.floor(tableMatches.length / 3)) : 0;
+  // Comptage des tableaux (lignes de séparation | --- |)
+  const tablesMatches = markdown.match(/^\|?\s*:?-+:?\s*\|/gm);
+  const tablesCount = tablesMatches ? tablesMatches.length : 0;
 
   return {
     words,
@@ -131,12 +188,17 @@ export function calculateDocumentStats(markdown: string): DocumentStats {
 }
 
 /**
- * Extrait le premier titre de niveau 1 (# Mon Titre) comme titre par défaut du document
+ * Extrait le titre principal du document Markdown (le premier titre # Titre trouvé)
  */
 export function extractTitle(markdown: string): string {
+  if (!markdown) return 'Document';
   const match = markdown.match(/^#\s+(.+)$/m);
   if (match && match[1]) {
-    return match[1].replace(/[*_~`]/g, '').trim();
+    return match[1].trim();
   }
-  return 'Document';
+  const subMatch = markdown.match(/^##\s+(.+)$/m);
+  if (subMatch && subMatch[1]) {
+    return subMatch[1].trim();
+  }
+  return 'Document Word';
 }

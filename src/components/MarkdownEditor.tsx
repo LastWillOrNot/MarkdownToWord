@@ -319,15 +319,45 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           <Quote className="h-3.5 w-3.5" />
         </button>
 
-        <button
-          type="button"
-          onClick={() => insertFormatting('```text\n', '\n```', 'code ou commande')}
-          className="p-1.5 hover:bg-slate-100 hover:text-slate-900 rounded-md transition"
-          title="Bloc de code (```)"
-          aria-label="Bloc de code"
-        >
-          <Code className="h-3.5 w-3.5" />
-        </button>
+        <div className="relative flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => insertFormatting('```typescript\n', '\n```', '// Votre code ici')}
+            className="p-1.5 hover:bg-slate-100 hover:text-blue-700 text-blue-600 rounded-md transition"
+            title="Insérer un bloc de code avec coloration syntaxique"
+            aria-label="Bloc de code"
+          >
+            <Code className="h-3.5 w-3.5" />
+          </button>
+          <select
+            aria-label="Insérer un extrait de code coloré par langage"
+            className="text-[10px] font-mono font-medium bg-slate-100/80 hover:bg-slate-200/80 border border-slate-200 rounded px-1 py-0.5 text-slate-700 focus:outline-none cursor-pointer"
+            defaultValue=""
+            onChange={(e) => {
+              const lang = e.target.value;
+              if (lang) {
+                const templates: Record<string, string> = {
+                  java: 'public class DocumentManager {\n    public static void main(String[] args) {\n        System.out.println("Traitement Java terminé.");\n    }\n}',
+                  typescript: 'interface DocumentConfig {\n  title: string;\n  version: number;\n}\n\nexport const config: DocumentConfig = {\n  title: "Spécification",\n  version: 2,\n};',
+                  python: 'def analyze_document(path: str) -> dict:\n    """Analyse un document et retourne les métadonnées."""\n    return {"status": "ok", "valid": True}',
+                  sql: 'SELECT id, title, author, created_at\nFROM documents\nWHERE status = \'ACTIVE\'\nORDER BY created_at DESC;',
+                  bash: '#!/usr/bin/env bash\nset -euo pipefail\necho "Conversion des documents en cours..."\nnpm run build',
+                };
+                insertFormatting(`\n\n\`\`\`${lang}\n`, `\n\`\`\`\n\n`, templates[lang] || '// Votre code ici');
+                e.target.value = '';
+              }
+            }}
+          >
+            <option value="" disabled>
+              Langage...
+            </option>
+            <option value="java">Java</option>
+            <option value="typescript">TypeScript / JS</option>
+            <option value="python">Python</option>
+            <option value="sql">SQL</option>
+            <option value="bash">Bash / Shell</option>
+          </select>
+        </div>
 
         <button
           type="button"

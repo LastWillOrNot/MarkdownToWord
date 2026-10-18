@@ -385,11 +385,34 @@ export async function generateWordDocument(
         }
 
         // Bloc de code avec cadre et police mono (fallback ou code standard)
+        const langLabel = token.lang ? token.lang.toUpperCase() : '';
+        if (langLabel) {
+          docElements.push(
+            new Paragraph({
+              spacing: { before: 80, after: 20 },
+              indent: { left: convertInchesToTwip(0.3) },
+              shading: {
+                type: ShadingType.CLEAR,
+                fill: 'E2E8F0',
+              },
+              children: [
+                new TextRun({
+                  text: `  [ CODE / SCRIPT : ${langLabel} ]`,
+                  bold: true,
+                  font: 'Consolas',
+                  size: 17, // 8.5pt
+                  color: theme.primaryColor,
+                }),
+              ],
+            })
+          );
+        }
+
         const codeLines = token.text.split('\n');
         for (const line of codeLines) {
           docElements.push(
             new Paragraph({
-              spacing: { before: 20, after: 20 },
+              spacing: { before: 15, after: 15 },
               indent: { left: convertInchesToTwip(0.3) },
               shading: {
                 type: ShadingType.CLEAR,
@@ -427,6 +450,12 @@ export async function generateWordDocument(
               type: ShadingType.CLEAR,
               fill: theme.tableHeaderBg,
             },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 6, color: theme.primaryColor },
+              bottom: { style: BorderStyle.SINGLE, size: 8, color: theme.primaryColor },
+              left: { style: BorderStyle.SINGLE, size: 6, color: theme.tableBorderColor },
+              right: { style: BorderStyle.SINGLE, size: 6, color: theme.tableBorderColor },
+            },
             children: [
               new Paragraph({
                 alignment: AlignmentType.LEFT,
@@ -456,6 +485,12 @@ export async function generateWordDocument(
               shading: {
                 type: ShadingType.CLEAR,
                 fill: isAlt ? 'F8FAFC' : 'FFFFFF',
+              },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 4, color: theme.tableBorderColor },
+                bottom: { style: BorderStyle.SINGLE, size: 4, color: theme.tableBorderColor },
+                left: { style: BorderStyle.SINGLE, size: 4, color: theme.tableBorderColor },
+                right: { style: BorderStyle.SINGLE, size: 4, color: theme.tableBorderColor },
               },
               children: [
                 new Paragraph({

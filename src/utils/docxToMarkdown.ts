@@ -44,6 +44,29 @@ function createTurndownService(): TurndownService {
     },
   });
 
+  // Règle de préservation pour les blocs de code avec coloration syntaxique
+  turndownService.addRule('codeBlockCard', {
+    filter: (node) => {
+      if (node.nodeName === 'DIV') {
+        const el = node as HTMLElement;
+        return (
+          el.hasAttribute('data-code-block') ||
+          (el.className && el.className.includes('code-block-card'))
+        );
+      }
+      return false;
+    },
+    replacement: (_content: string, node: Node) => {
+      const el = node as HTMLElement;
+      const codeEl = el.querySelector('code');
+      const text = codeEl ? codeEl.textContent || '' : '';
+      const langEl = el.querySelector('.code-block-header span');
+      const langText = langEl ? langEl.textContent?.trim().toLowerCase() : '';
+      const cleanLang = langText && langText !== 'code' ? langText : '';
+      return `\n\n\`\`\`${cleanLang}\n${text.trim()}\n\`\`\`\n\n`;
+    },
+  });
+
   // Règles personnalisées pour un Markdown soigné
   turndownService.addRule('cleanParagraphs', {
     filter: 'p',

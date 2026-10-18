@@ -16,3 +16,24 @@ export interface DocumentStats {
   headingsCount: number;
   tablesCount: number;
 }
+
+/**
+ * Types pour la gestion des répertoires et espaces de travail multi-fichiers
+ */
+export type ItemType = 'file' | 'folder';
+
+export interface ProjectItem {
+  id: string;
+  name: string;
+  path: string; // ex: "01_Specifications/Cycle_Vie.md"
+  type: ItemType;
+  content?: string; // Contenu Markdown pour les fichiers
+  children?: ProjectItem[]; // Sous-dossiers et fichiers pour un dossier
+  isOpen?: boolean; // Dossier déplié/replié
+  isModified?: boolean; // Modifications non exportées
+}
+
+export interface WorkspaceProject {
+  rootName: string;
+  items: ProjectItem[];
+}
