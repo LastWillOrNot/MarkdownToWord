@@ -11,6 +11,8 @@ interface DocumentPreviewProps {
   options: DocumentOptions;
   onMarkdownChange: (newMarkdown: string) => void;
   onImportDocx: (file: File) => void;
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+  onScroll?: (e: React.UIEvent<HTMLDivElement>) => void;
 }
 
 const THEME_FONTS: Record<DocumentTheme, string> = {
@@ -32,10 +34,14 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   options,
   onMarkdownChange,
   onImportDocx,
+  scrollContainerRef: externalScrollRef,
+  onScroll,
 }) => {
   const [isDirectEditing, setIsDirectEditing] = useState(false);
   const [justSynced, setJustSynced] = useState(false);
   const editableRef = useRef<HTMLDivElement>(null);
+  const internalScrollRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = externalScrollRef || internalScrollRef;
   const isTypingRef = useRef(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const docxInputRef = useRef<HTMLInputElement>(null);
@@ -216,8 +222,12 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         </div>
       )}
 
-      {/* Conteneur défilant des pages A4 Word */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center">
+      {/* Conteneur défilant des pages A4 Word avec support du défilement synchronisé */}
+      <div
+        ref={scrollContainerRef}
+        onScroll={onScroll}
+        className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center"
+      >
         {/* Mode 1 : Édition directe active (une seule feuille globale continue pour faciliter la frappe) */}
         {isDirectEditing ? (
           <article

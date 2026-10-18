@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
 import { StatsBar } from './components/StatsBar';
 import { MarkdownEditor } from './components/MarkdownEditor';
@@ -29,7 +29,7 @@ import {
   exportProjectToZip,
 } from './utils/workspaceManager';
 import { DocumentOptions, ProjectItem } from './types';
-import { Columns2, Edit3, Eye, ArrowLeftRight, FolderTree } from 'lucide-react';
+import { Columns2, Edit3, Eye, ArrowLeftRight, FolderTree, Link2, Unlink2 } from 'lucide-react';
 
 export default function App() {
   // Arborescence du répertoire de travail (Espace multi-fichiers)
@@ -74,6 +74,63 @@ export default function App() {
     setTimeout(() => setNotice(null), 4500);
   };
 
+  // Références et synchronisation du défilement dans la vue côte à côte
+  const editorTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isScrollSynced, setIsScrollSynced] = useState<boolean>(true);
+  const isSyncingScrollRef = useRef<'editor' | 'preview' | null>(null);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Synchronisation du défilement : Éditeur Markdown -> Aperçu Word
+  const handleEditorScroll = useCallback(() => {
+    if (!isScrollSynced || viewMode !== 'split') return;
+    if (isSyncingScrollRef.current === 'preview') return;
+
+    isSyncingScrollRef.current = 'editor';
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+
+    const editorEl = editorTextareaRef.current;
+    const previewEl = previewContainerRef.current;
+
+    if (editorEl && previewEl) {
+      const editorMax = editorEl.scrollHeight - editorEl.clientHeight;
+      if (editorMax > 0) {
+        const scrollRatio = editorEl.scrollTop / editorMax;
+        const previewMax = previewEl.scrollHeight - previewEl.clientHeight;
+        previewEl.scrollTop = Math.round(scrollRatio * previewMax);
+      }
+    }
+
+    syncTimeoutRef.current = setTimeout(() => {
+      isSyncingScrollRef.current = null;
+    }, 80);
+  }, [isScrollSynced, viewMode]);
+
+  // Synchronisation du défilement : Aperçu Word -> Éditeur Markdown
+  const handlePreviewScroll = useCallback(() => {
+    if (!isScrollSynced || viewMode !== 'split') return;
+    if (isSyncingScrollRef.current === 'editor') return;
+
+    isSyncingScrollRef.current = 'preview';
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+
+    const editorEl = editorTextareaRef.current;
+    const previewEl = previewContainerRef.current;
+
+    if (editorEl && previewEl) {
+      const previewMax = previewEl.scrollHeight - previewEl.clientHeight;
+      if (previewMax > 0) {
+        const scrollRatio = previewEl.scrollTop / previewMax;
+        const editorMax = editorEl.scrollHeight - editorEl.clientHeight;
+        editorEl.scrollTop = Math.round(scrollRatio * editorMax);
+      }
+    }
+
+    syncTimeoutRef.current = setTimeout(() => {
+      isSyncingScrollRef.current = null;
+    }, 80);
+  }, [isScrollSynced, viewMode]);
+
   // Synchronisation du contenu Markdown modifié avec l'arborescence du projet
   const handleMarkdownChange = useCallback(
     (newContent: string) => {
@@ -108,7 +165,11 @@ export default function App() {
         title: extractTitle(targetContent) || cleanName,
       }));
 
-      // 3. Ajouter aux onglets ouverts s'il n'y est pas déjà
+      // 3. Remettre le défilement au sommet du document
+      if (editorTextareaRef.current) editorTextareaRef.current.scrollTop = 0;
+      if (previewContainerRef.current) previewContainerRef.current.scrollTop = 0;
+
+      // 4. Ajouter aux onglets ouverts s'il n'y est pas déjà
       setOpenTabs((prevTabs) => {
         if (!prevTabs.includes(file.id)) {
           return [...prevTabs, file.id];
@@ -302,6 +363,8 @@ export default function App() {
       ...prev,
       title: extractTitle(sample.content),
     }));
+    if (editorTextareaRef.current) editorTextareaRef.current.scrollTop = 0;
+    if (previewContainerRef.current) previewContainerRef.current.scrollTop = 0;
     showNotification(`Modèle « ${sample.name} » chargé avec succès.`);
   }, []);
 
@@ -314,6 +377,8 @@ export default function App() {
       ...prev,
       title: extractTitle(content),
     }));
+    if (editorTextareaRef.current) editorTextareaRef.current.scrollTop = 0;
+    if (previewContainerRef.current) previewContainerRef.current.scrollTop = 0;
     showNotification(`Fichier « ${loadedFilename} » importé avec succès.`);
   }, []);
 
@@ -477,6 +542,39 @@ export default function App() {
               <span>Document Lisible (Word)</span>
             </button>
           </div>
+
+          {/* Bouton de bascule pour le défilement synchronisé en mode côte à côte */}
+          {viewMode === 'split' && (
+            <button
+              type="button"
+              onClick={() => setIsScrollSynced((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition shadow-2xs ${
+                isScrollSynced
+                  ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100/70'
+                  : 'bg-white text-slate-500 hover:text-slate-800 border-slate-300'
+              }`}
+              title={
+                isScrollSynced
+                  ? 'Défilement synchronisé actif (cliquez pour désactiver)'
+                  : 'Défilement synchronisé désactivé (cliquez pour activer)'
+              }
+              aria-pressed={isScrollSynced}
+            >
+              {isScrollSynced ? (
+                <Link2 className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
+              ) : (
+                <Unlink2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+              )}
+              <span className="hidden sm:inline">Défilement synchronisé</span>
+              <span className="sm:hidden">Synchro</span>
+              <span
+                className={`w-2 h-2 rounded-full transition-colors ${
+                  isScrollSynced ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+                }`}
+                aria-hidden="true"
+              />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -539,6 +637,8 @@ export default function App() {
                     onFileLoaded={handleFileLoaded}
                     onImportDocx={handleImportDocx}
                     onDownloadMarkdown={handleExportMarkdown}
+                    textareaRef={editorTextareaRef}
+                    onScroll={handleEditorScroll}
                   />
                 </div>
               )}
@@ -551,6 +651,8 @@ export default function App() {
                     options={options}
                     onMarkdownChange={handleMarkdownChange}
                     onImportDocx={handleImportDocx}
+                    scrollContainerRef={previewContainerRef}
+                    onScroll={handlePreviewScroll}
                   />
                 </div>
               )}

@@ -30,6 +30,8 @@ interface MarkdownEditorProps {
   onFileLoaded: (filename: string, content: string) => void;
   onImportDocx: (file: File) => void;
   onDownloadMarkdown: () => void;
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  onScroll?: (e: React.UIEvent<HTMLTextAreaElement>) => void;
 }
 
 export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
@@ -39,10 +41,13 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   onFileLoaded,
   onImportDocx,
   onDownloadMarkdown,
+  textareaRef: externalTextareaRef,
+  onScroll,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docxInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const internalTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = externalTextareaRef || internalTextareaRef;
   const [isDragging, setIsDragging] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -412,8 +417,8 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         </button>
       </div>
 
-      {/* Zone d'édition texte */}
-      <div className="relative flex-1 min-h-[360px] p-3">
+      {/* Zone d'édition texte avec support du défilement synchronisé */}
+      <div className="relative flex-1 min-h-0 p-3 flex flex-col">
         <label htmlFor="markdown-textarea" className="sr-only">
           Contenu du fichier Markdown
         </label>
@@ -422,8 +427,9 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           ref={textareaRef}
           value={markdown}
           onChange={(e) => onChange(e.target.value)}
+          onScroll={onScroll}
           placeholder="Glissez-déposez un fichier Markdown ici (.md), collez votre texte ou commencez à taper..."
-          className="w-full h-full resize-none font-mono text-[13px] leading-relaxed text-slate-800 focus:outline-none placeholder:text-slate-400 p-2"
+          className="w-full flex-1 resize-none font-mono text-[13px] leading-relaxed text-slate-800 focus:outline-none placeholder:text-slate-400 p-2 overflow-y-auto"
           spellCheck={false}
         />
 
